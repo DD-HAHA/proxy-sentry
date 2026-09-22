@@ -1,0 +1,37 @@
+<svg width="1200" height="520" viewBox="0 0 1200 520" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>ProxySentry — macOS 节点故障切换守卫</title>
+  <rect width="1200" height="520" rx="32" fill="#F6F1E7"/>
+  <path d="M0 400C174 339 319 461 503 406C695 349 838 327 1200 409V520H0V400Z" fill="#C8FF57"/>
+  <circle cx="64" cy="58" r="12" fill="#FF5A47"/>
+  <circle cx="96" cy="58" r="12" fill="#1D5CFF"/>
+  <circle cx="128" cy="58" r="12" fill="#111111"/>
+
+  <text x="62" y="125" fill="#111111" font-family="Arial, PingFang SC, sans-serif" font-size="20" font-weight="700" letter-spacing="3">MACOS / AUTO FAILOVER</text>
+  <text x="58" y="235" fill="#111111" font-family="Arial Black, Arial, PingFang SC, sans-serif" font-size="78" font-weight="900">Proxy</text>
+  <text x="288" y="235" fill="#1D5CFF" font-family="Arial Black, Arial, PingFang SC, sans-serif" font-size="78" font-weight="900">Sentry</text>
+  <text x="62" y="302" fill="#111111" font-family="Arial, PingFang SC, sans-serif" font-size="37" font-weight="800">节点会假活，网络不能装死。</text>
+  <text x="62" y="353" fill="#414141" font-family="Arial, PingFang SC, sans-serif" font-size="23" font-weight="500">延迟只是线索，真实吞吐才是答案。</text>
+
+  <g>
+    <rect x="792" y="72" width="340" height="139" rx="22" fill="#1D5CFF"/>
+    <text x="820" y="120" fill="#DDE7FF" font-family="Arial, PingFang SC, sans-serif" font-size="20" font-weight="700">延迟看起来很健康</text>
+    <text x="820" y="184" fill="white" font-family="Arial Black, Arial, sans-serif" font-size="66" font-weight="900">121 ms</text>
+  </g>
+  <g>
+    <rect x="792" y="231" width="340" height="137" rx="22" fill="#FF5A47"/>
+    <text x="820" y="279" fill="#FFE6E1" font-family="Arial, PingFang SC, sans-serif" font-size="20" font-weight="700">实际下载只剩</text>
+    <text x="820" y="341" fill="white" font-family="Arial Black, Arial, sans-serif" font-size="66" font-weight="900">1 B/s</text>
+  </g>
+
+  <path d="M720 141C758 151 768 177 777 202" stroke="#111111" stroke-width="7" stroke-linecap="round" stroke-dasharray="2 18"/>
+  <path d="M764 192L779 211L789 190" stroke="#111111" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <g transform="translate(60 431)">
+    <rect width="374" height="54" rx="27" fill="#111111"/>
+    <text x="28" y="35" fill="white" font-family="Arial, PingFang SC, sans-serif" font-size="20" font-weight="700">连续确认 · 吞吐验证 · 自动恢复</text>
+  </g>
+  <g>
+    <rect x="978" y="430" width="158" height="56" rx="8" fill="#FFD84D" stroke="#111111" stroke-width="4"/>
+    <text x="998" y="466" fill="#111111" font-family="Arial, sans-serif" font-size="19" font-weight="900">OPEN SOURCE</text>
+  </g>
+</svg>

@@ -1,49 +1,67 @@
-# ProxySentry
+<p align="center">
+  <img src="docs/assets/hero.svg" alt="ProxySentry：节点会假活，网络不能装死" width="100%">
+</p>
 
-面向 macOS、Clash Verge Rev 和 mihomo 内核的保守型节点故障切换守卫。它不是常驻代理，也不接管配置；它只通过本机 Unix socket 观察并切换一个 Selector。
+<p align="center">
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/badge/license-MIT-111111?style=flat-square"></a>
+  <img alt="macOS" src="https://img.shields.io/badge/macOS-LaunchAgent-1D5CFF?style=flat-square">
+  <img alt="Python standard library" src="https://img.shields.io/badge/Python-stdlib_only-C8FF57?style=flat-square&labelColor=111111">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-15_passing-FF5A47?style=flat-square">
+</p>
 
-完整状态和恢复规则见 [`docs/DESIGN.md`](docs/DESIGN.md)。
+<p align="center">
+  一个不把「延迟低」误当成「网络能用」的 macOS 节点故障切换脚本。<br>
+  为 Clash Verge Rev / mihomo 而写，平时安静巡检，故障时才接管。
+</p>
 
-## 行为概览
+---
 
-- 每 60 秒检查 `主代理` 当前选择。
-- 同一具体节点连续 2 次探活失败后，先复检当前节点，再检查本机直连网络。
-- 本机在线时，并行探测组内具体节点，跳过策略组和处于隔离期的节点。
-- 按延迟取前 3 名，逐个临时切换并下载 1 MiB：必须读满且平均速度不低于 0.5 MiB/s 才采用。
-- 0.3–0.5 MiB/s 的临界结果额外复测一次；下载超时、HTTP 错误、代理错误、未读满和吞吐不达标分别记录。
-- 验证失败的节点隔离 30 分钟；同一节点再次失败时 TTL 翻倍，最多 4 小时。隔离记录持久化，24 小时未再失败后遗忘。
-- 活跃隔离达到 3 个或候选全部失败时，切回 `自动选择` URLTest 组止血，并以最长 30 分钟的指数退避持续寻找恢复节点。
-- 只有具体节点和 URLTest 兜底都不可用的 `OUTAGE` 会发送 macOS 通知，持续故障最多每 30 分钟提醒一次。
-- 本机离线期间不新增或刷新任何节点隔离。
-- 用户手动选择具体节点时，重新进入观察期；用户手动选择策略组时，脚本完全不干预。
+## 为什么会有它？
 
-## 吞吐验证前提
+真实故障很离谱：节点延迟 **121 ms**，看起来一切正常，实际下载速度却只有 **1 B/s**。
 
-脚本通过 `http://127.0.0.1:7897` 下载 Cloudflare 的 1 MiB 测试对象。这个代理入口的路由必须经过被守护的 `主代理`，否则测速结果不能代表刚切换的候选节点。
+纯延迟探活看不见这种“半残节点”。ProxySentry 会在确认故障后，从低延迟候选里逐个做一次小流量真实下载；读不满、超时或吞吐不达标，都不会把你切过去。
 
-如果本机 HTTP 代理端口不同，通过 `CLASH_GUARD_PROXY` 修改。故障切换期间会短暂依次选中候选节点，现有连接可能瞬断；这是 mihomo API 无法在不切换 Selector 的情况下让流量指定走某个候选节点所决定的。
+> **它不是测速排名工具。** 目标是在网络坏掉时，尽快找到第一个真正能用的节点，然后停手。
 
-## 安全设计
+## 30 秒看懂
 
-- `fcntl` 非阻塞进程锁阻止 LaunchAgent、循环壳和手动运行重叠。
-- PUT 前后都读取当前选择，目标必须是 Selector 的直接成员；发现用户改选立即停止。
-- 切换意图先写入状态，进程在 PUT 后崩溃时可以继续验证，而不会直接把临时节点当成成功。
-- API 响应限制为 4 MiB；节点名严格 URL 编码；日志清洗控制字符。
-- 状态原子更新，日志和状态权限固定为 `0600`，工作目录应为 `0700`。
-- 日志保留最近 500 行。
+```mermaid
+flowchart LR
+    A[每 60 秒巡检] --> B{"同一节点<br/>连续失败 2 次?"}
+    B -- 否 --> A
+    B -- 是 --> C{本机直连正常?}
+    C -- 否 --> D["等待恢复<br/>不隔离节点"]
+    C -- 是 --> E[并行探测具体节点]
+    E --> F["延迟前 3 名<br/>逐个下载 1 MiB"]
+    F -->|≥ 0.5 MiB/s| G[采用并观察]
+    F -->|超时 / 未读满 / 过慢| H[临时隔离]
+    H --> F
+    H -->|候选耗尽| I[切回 URLTest 兜底]
+```
 
-mihomo 的 Unix socket 控制接口不使用 `secret` 鉴权。安全边界是 socket 及其父目录的本机文件权限；不要让其他本机用户拥有连接或替换该 socket 的权限。脚本不上传配置、节点名或日志。探活会访问 Google、Cloudflare 和 Apple 的固定测试地址，故障吞吐验证会经代理访问 Cloudflare；这些服务会像普通网络请求一样看到出口 IP、时间和 HTTP 元数据。
+| 你在意的事 | ProxySentry 怎么做 |
+| --- | --- |
+| 会不会网络一抖就乱切？ | 同一节点连续失败 2 次，切换前再复检一次 |
+| 本机断网会不会误伤全部节点？ | 先做直连检查；离线期间绝不新增隔离 |
+| 延迟正常但线路半死怎么办？ | 前 3 名逐个下载 1 MiB，读满且 ≥ 0.5 MiB/s 才采用 |
+| 坏节点会不会永远拉黑？ | 10 分钟起步的 TTL，重复失败指数退避，最长 4 小时 |
+| 我手动选节点，它会抢吗？ | 识别手动选择；具体节点重新观察，策略组完全尊重 |
+| 全部节点都不行呢？ | 切回 `自动选择` 止血，并继续退避扫描恢复节点 |
 
-## 要求
+完整状态机、恢复边和结果分类见 [`docs/DESIGN.md`](docs/DESIGN.md)。
+
+## 快速开始
+
+### 运行要求
 
 - macOS
-- `/usr/bin/python3`（仅用标准库）
-- `/usr/bin/curl`
-- Clash Verge Rev/mihomo Unix 控制接口，默认 `/tmp/verge/verge-mihomo.sock`
-- 被守护 Selector 默认名为 `主代理`
-- URLTest 兜底组默认名为 `自动选择`，且是 `主代理` 的成员
+- Clash Verge Rev / mihomo Unix 控制接口
+- 系统自带 `/usr/bin/python3` 与 `/usr/bin/curl`
+- 默认 Selector：`主代理`
+- 默认 URLTest 兜底组：`自动选择`
 
-## 安装
+### 安装
 
 ```sh
 mkdir -p ~/.workbuddy/bin ~/.workbuddy/logs
@@ -63,7 +81,7 @@ LaunchAgent 已负责每分钟调度。正常安装不需要 `clash-guard-loop.s
 launchctl bootout gui/$(id -u)/com.$USER.clash-guard
 ```
 
-## 可选环境变量
+## 配置
 
 | 变量 | 默认值 | 用途 |
 | --- | --- | --- |
@@ -74,12 +92,42 @@ launchctl bootout gui/$(id -u)/com.$USER.clash-guard
 
 LaunchAgent 中可通过 `EnvironmentVariables` 字典配置这些值。
 
+### 吞吐验证前提
+
+`CLASH_GUARD_PROXY` 对应的本地 HTTP 代理入口必须经过被守护的 Selector，否则测速结果不能代表刚切换的候选节点。
+
+候选验证会短暂依次选中节点，现有连接可能瞬断。这是因为 mihomo API 无法在不切换 Selector 的情况下，让测试流量指定经过某个候选节点。
+
+## 安全边界
+
+- 非阻塞进程锁阻止 LaunchAgent、循环壳和手动运行互相重叠。
+- 每次切换前后都检查当前选择；发现用户改选，立即停止自动操作。
+- 状态以原子方式写入，日志和状态权限固定为 `0600`。
+- API 响应限制为 4 MiB；节点名严格 URL 编码；日志清洗控制字符。
+- 脚本不上传配置、节点名或日志。探活与吞吐测试只访问文档列出的固定测试地址。
+
+> [!IMPORTANT]
+> mihomo 的 Unix socket 控制接口没有 `secret` 鉴权。它的安全边界是 socket 和父目录的本机文件权限。多人共用的 Mac 应特别检查其他用户是否可以访问该 socket。详情见 [`SECURITY.md`](SECURITY.md)。
+
 ## 测试
 
 ```sh
 PYTHONPYCACHEPREFIX="$PWD/.pycache" /usr/bin/python3 -m unittest discover -s tests -v
 /bin/bash -n clash-guard-loop.sh
 plutil -lint com.example.clash-guard.plist
+```
+
+预期结果：15 个单元测试全部通过，shell 与 plist 语法检查通过。
+
+## 项目结构
+
+```text
+clash-guard.py                  主程序
+com.example.clash-guard.plist   LaunchAgent 模板
+clash-guard-loop.sh             不使用 launchd 时的兼容循环壳
+docs/DESIGN.md                  状态机与故障策略
+SECURITY.md                     威胁模型与安全边界
+tests/                          回归测试
 ```
 
 ## 设计参考
