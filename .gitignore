@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+*.log
+*.state
+.DS_Store
+/work/
+/outputs/
